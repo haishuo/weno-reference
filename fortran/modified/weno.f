@@ -78,7 +78,8 @@ c      tcpu=second()
       write(6,*) 'cpu per 20 time steps',tcpu-t00
       t00=tcpu
       end if
-call cflc(aam)
+      call cflc(aam)
+      write(6,*) 'DEBUG: aam=', aam, ' dt=', cfl/aam
       dt=cfl/aam
 
 c         dt = cfl / em / ( cdx + cdy )
@@ -286,6 +287,11 @@ c     Override for shock problems
         enddo
       endif
 c
+c     ADD THESE DEBUG LINES HERE:
+      if(nprob.eq.4) then
+        write(6,*) 'DEBUG: After Sod init, uc(10,5,1,0)=', uc(10,5,1,0)
+        write(6,*) 'DEBUG: After Sod init, uc(10,5,4,0)=', uc(10,5,4,0)
+      endif
 
       write(6,*) 'enter the status of the initial condition'
       write(6,*) '  0 = initial at t=0.'
@@ -311,24 +317,49 @@ c
 * Name:      bc_per.f
 * Function:  periodic boundary condition
 *****678****************************************************************
+c     DEBUG: Check values before BC
+      if(io.eq.0) then
+        write(6,*) 'DEBUG BC START: uc(10,5,1,0)=', uc(10,5,1,0)
+      endif
 
-      do m = 1, mn
+      if(nprob.ge.4) then
+c       Shock problems need transmissive BCs
+        do m = 1, mn
+          do i = 1, md
+          do j = -md, nym
+            uc(-i+1,j,m,io) = uc(0,j,m,io)
+            uc(nx+i-1,j,m,io) = uc(nx,j,m,io)
+          enddo
+          enddo
+          do j = 1, md
+          do i = -md, nxm
+            uc(i,-j+1,m,io) = uc(i,ny-j+1,m,io)
+            uc(i,ny+j-1,m,io) = uc(i,j-1,m,io)
+          enddo
+          enddo
+        enddo
+      else
+c       Original periodic BCs
+        do m = 1, mn
+        do i = 0, md
+        do j = 0, ny
+        uc(  -i,j,m,io) = uc(nx-i,j,m,io)
+        uc(nx+i,j,m,io) = uc(   i,j,m,io)
+        enddo
+        enddo
+        do j = 0, md
+        do i = 0, nx
+        uc(i,  -j,m,io) = uc(i,ny-j,m,io)
+        uc(i,ny+j,m,io) = uc(i,   j,m,io)
+        enddo
+        enddo
+        enddo
+      endif
 
-      do i = 0, md
-      do j = 0, ny
-      uc(  -i,j,m,io) = uc(nx-i,j,m,io)
-      uc(nx+i,j,m,io) = uc(   i,j,m,io)
-      enddo
-      enddo
-
-      do j = 0, md
-      do i = 0, nx
-      uc(i,  -j,m,io) = uc(i,ny-j,m,io)
-      uc(i,ny+j,m,io) = uc(i,   j,m,io)
-      enddo
-      enddo
-
-      enddo
+c     DEBUG: Check values after BC
+      if(io.eq.0) then
+        write(6,*) 'DEBUG BC END: uc(10,5,1,0)=', uc(10,5,1,0)
+      endif
 
       return
       end
@@ -799,19 +830,33 @@ c computed the largest eigenvalue for cfl
 
 c     dimension w(nx,ny)
 
+c     ADD THESE DECLARATIONS:
+      real*8 rij, sij, q2, pij, c2, cij, wtmp
+
+c     DEBUG: Check if variables are set
+      write(6,*) 'DEBUG cflc: gamma=', gamma, ' dx=', dx, ' dy=', dy
+
       aam=0.
-      do 2 j=1,ny
-      do 2 i=1,nx
+      do 2 j=0,ny
+      do 2 i=0,nx
       rij=uc(i,j,2,0)/uc(i,j,1,0)
       sij=uc(i,j,3,0)/uc(i,j,1,0)
       q2=rij**2+sij**2
       pij=(gamma-1.)*(uc(i,j,4,0)-0.5*uc(i,j,1,0)*q2)
-c2=gamma*pij/uc(i,j,1,0)
-cij=sqrt(abs(c2))
+      c2=gamma*pij/uc(i,j,1,0)
+      cij=sqrt(abs(c2))
 
 c     w(i,j)=(abs(rij)+cij)/dx+(abs(sij)+cij)/dy
       wtmp=(abs(rij)+cij)/dx+(abs(sij)+cij)/dy
       aam=max(aam,wtmp)
+
+c     Check both sides of shock
+      if((i.eq.5 .or. i.eq.15) .and. j.eq.5) then
+        write(6,*) 'DEBUG cflc i=', i, ' j=', j
+        write(6,*) '  rho=', uc(i,j,1,0), ' E=', uc(i,j,4,0)
+        write(6,*) '  pij=', pij, ' cij=', cij, ' wtmp=', wtmp
+      endif
+
 2     continue
 c     nn=nx*ny
 c     i0=ismax(nn,w(1,1),1)

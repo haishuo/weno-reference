@@ -11,7 +11,7 @@
       parameter( nxd=200+md, nyd=200+md, nsd=200+md )
 
 * constants:
-      common/const_int/ntot,mt,mn,nx,nxm,ny,nym,nt
+      common/const_int/ntot,mt,mn,nx,nxm,ny,nym,nt,nprob
       common/const_real/gamma,gm1,cfl,epweno,tend
 
 * grid related variables:

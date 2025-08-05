@@ -78,8 +78,7 @@ c      tcpu=second()
       write(6,*) 'cpu per 20 time steps',tcpu-t00
       t00=tcpu
       end if
-      call cflc(aam)
-      write(6,*) 'DEBUG: aam=', aam, ' dt=', cfl/aam
+call cflc(aam)
       dt=cfl/aam
 
 c         dt = cfl / em / ( cdx + cdy )
@@ -207,34 +206,24 @@ coefk=rkap/(2.*pi*exp(-0.5))
       ggc=1.0/ggb
       ggd=-1.0/gamma
 
-      if(nprob.eq.1) then
+c Only apply vortex initialization for problems 1-3
+      if(nprob.le.3) then
 
+      if(nprob.eq.1) then
       dri=1.
       uri=0.
       vri=0.
       pri=1.
-
       else if(nprob.eq.2) then
-
       dri=1.
       uri=1.
       vri=0.
       pri=1.
-
       else if(nprob.eq.3) then
-
       dri=1.
       uri=1.
       vri=1.
       pri=1.
-
-
-c     Sod shock tube - handled after vortex loop
-
-c     2D Riemann - handled after vortex loop
-
-c     Blast wave - handled after vortex loop
-
       end if
 
       do 1 j=-md,nym
@@ -265,32 +254,87 @@ cij=dri
       uc(i,j,2,0)=cij*rij
       uc(i,j,3,0)=cij*sij
       uc(i,j,4,0)=pij/(gamma-1.)+0.5*cij*(rij**2+sij**2)
-
 1     continue
-c
-c     Override for shock problems
+
+      endif
+
+c Handle shock problems separately (4, 5, 6)
       if(nprob.eq.4) then
-        do j=0,ny
-        do i=0,nx
+c       1D Sod shock tube
+        do j=-md,nym
+        do i=-md,nxm
         if(x(i) .lt. 5.0) then
+c         Left state: high pressure/density
           uc(i,j,1,0) = 1.0
           uc(i,j,2,0) = 0.0
           uc(i,j,3,0) = 0.0
-          uc(i,j,4,0) = 2.5
+          uc(i,j,4,0) = 1.0/(gamma-1.0)
         else
+c         Right state: low pressure/density
           uc(i,j,1,0) = 0.125
           uc(i,j,2,0) = 0.0
           uc(i,j,3,0) = 0.0
-          uc(i,j,4,0) = 0.25
+          uc(i,j,4,0) = 0.1/(gamma-1.0)
         endif
         enddo
         enddo
       endif
-c
-c     ADD THESE DEBUG LINES HERE:
-      if(nprob.eq.4) then
-        write(6,*) 'DEBUG: After Sod init, uc(10,5,1,0)=', uc(10,5,1,0)
-        write(6,*) 'DEBUG: After Sod init, uc(10,5,4,0)=', uc(10,5,4,0)
+
+      if(nprob.eq.5) then
+c       2D Riemann problem (4-quadrant configuration)
+        do j=-md,nym
+        do i=-md,nxm
+        if(x(i).lt.5.0 .and. y(j).lt.5.0) then
+c         Quadrant I: high pressure
+          uc(i,j,1,0) = 1.0
+          uc(i,j,2,0) = 0.0
+          uc(i,j,3,0) = 0.0
+          uc(i,j,4,0) = 1.0/(gamma-1.0)
+        else if(x(i).ge.5.0 .and. y(j).lt.5.0) then
+c         Quadrant II: medium pressure + x-velocity
+          uc(i,j,1,0) = 0.5197
+          uc(i,j,2,0) = 0.5197 * (-0.7259)
+          uc(i,j,3,0) = 0.0
+          uc(i,j,4,0) = 0.4/(gamma-1.0) + 0.5*0.5197*(-0.7259)**2
+        else if(x(i).lt.5.0 .and. y(j).ge.5.0) then
+c         Quadrant III: medium pressure + y-velocity
+          uc(i,j,1,0) = 0.5197
+          uc(i,j,2,0) = 0.0
+          uc(i,j,3,0) = 0.5197 * (-0.7259)
+          uc(i,j,4,0) = 0.4/(gamma-1.0) + 0.5*0.5197*(-0.7259)**2
+        else
+c         Quadrant IV: low pressure
+          uc(i,j,1,0) = 0.1379
+          uc(i,j,2,0) = 0.0
+          uc(i,j,3,0) = 0.0
+          uc(i,j,4,0) = 0.029/(gamma-1.0)
+        endif
+        enddo
+        enddo
+      endif
+
+      if(nprob.eq.6) then
+c       Blast wave problem (high pressure center)
+        do j=-md,nym
+        do i=-md,nxm
+        xr = x(i) - 5.0
+        yr = y(j) - 5.0
+        rr = sqrt(xr*xr + yr*yr)
+        if(rr .lt. 1.0) then
+c         High pressure blast region
+          uc(i,j,1,0) = 1.0
+          uc(i,j,2,0) = 0.0
+          uc(i,j,3,0) = 0.0
+          uc(i,j,4,0) = 1000.0/(gamma-1.0)
+        else
+c         Low pressure ambient
+          uc(i,j,1,0) = 1.0
+          uc(i,j,2,0) = 0.0
+          uc(i,j,3,0) = 0.0
+          uc(i,j,4,0) = 0.01/(gamma-1.0)
+        endif
+        enddo
+        enddo
       endif
 
       write(6,*) 'enter the status of the initial condition'
@@ -315,50 +359,50 @@ c     ADD THESE DEBUG LINES HERE:
       include 'comm.inc'
 *****678****************************************************************
 * Name:      bc_per.f
-* Function:  periodic boundary condition
+* Function:  boundary condition (periodic or transmissive)
 *****678****************************************************************
-c     DEBUG: Check values before BC
-      if(io.eq.0) then
-        write(6,*) 'DEBUG BC START: uc(10,5,1,0)=', uc(10,5,1,0)
-      endif
 
-      if(nprob.ge.4) then
-c       Shock problems need transmissive BCs
+      if(nprob.le.3) then
+c       Periodic BC for vortex problems
         do m = 1, mn
-          do i = 1, md
-          do j = -md, nym
-            uc(-i+1,j,m,io) = uc(0,j,m,io)
-            uc(nx+i-1,j,m,io) = uc(nx,j,m,io)
-          enddo
-          enddo
-          do j = 1, md
-          do i = -md, nxm
-            uc(i,-j+1,m,io) = uc(i,ny-j+1,m,io)
-            uc(i,ny+j-1,m,io) = uc(i,j-1,m,io)
-          enddo
-          enddo
-        enddo
-      else
-c       Original periodic BCs
-        do m = 1, mn
+
         do i = 0, md
         do j = 0, ny
         uc(  -i,j,m,io) = uc(nx-i,j,m,io)
         uc(nx+i,j,m,io) = uc(   i,j,m,io)
         enddo
         enddo
+
         do j = 0, md
         do i = 0, nx
         uc(i,  -j,m,io) = uc(i,ny-j,m,io)
         uc(i,ny+j,m,io) = uc(i,   j,m,io)
         enddo
         enddo
-        enddo
-      endif
 
-c     DEBUG: Check values after BC
-      if(io.eq.0) then
-        write(6,*) 'DEBUG BC END: uc(10,5,1,0)=', uc(10,5,1,0)
+        enddo
+
+      else
+c       Transmissive (zero-gradient) BC for shock problems
+        do m = 1, mn
+        
+c       X-direction boundaries
+        do j = 0, ny
+        do i = 1, md
+        uc(-i,j,m,io) = uc(0,j,m,io)
+        uc(nx+i,j,m,io) = uc(nx,j,m,io)
+        enddo
+        enddo
+        
+c       Y-direction boundaries
+        do i = -md, nxm
+        do j = 1, md
+        uc(i,-j,m,io) = uc(i,0,m,io)
+        uc(i,ny+j,m,io) = uc(i,ny,m,io)
+        enddo
+        enddo
+        
+        enddo
       endif
 
       return
@@ -830,12 +874,6 @@ c computed the largest eigenvalue for cfl
 
 c     dimension w(nx,ny)
 
-c     ADD THESE DECLARATIONS:
-      real*8 rij, sij, q2, pij, c2, cij, wtmp
-
-c     DEBUG: Check if variables are set
-      write(6,*) 'DEBUG cflc: gamma=', gamma, ' dx=', dx, ' dy=', dy
-
       aam=0.
       do 2 j=0,ny
       do 2 i=0,nx
@@ -843,20 +881,12 @@ c     DEBUG: Check if variables are set
       sij=uc(i,j,3,0)/uc(i,j,1,0)
       q2=rij**2+sij**2
       pij=(gamma-1.)*(uc(i,j,4,0)-0.5*uc(i,j,1,0)*q2)
-      c2=gamma*pij/uc(i,j,1,0)
-      cij=sqrt(abs(c2))
+c2=gamma*pij/uc(i,j,1,0)
+cij=sqrt(abs(c2))
 
 c     w(i,j)=(abs(rij)+cij)/dx+(abs(sij)+cij)/dy
       wtmp=(abs(rij)+cij)/dx+(abs(sij)+cij)/dy
       aam=max(aam,wtmp)
-
-c     Check both sides of shock
-      if((i.eq.5 .or. i.eq.15) .and. j.eq.5) then
-        write(6,*) 'DEBUG cflc i=', i, ' j=', j
-        write(6,*) '  rho=', uc(i,j,1,0), ' E=', uc(i,j,4,0)
-        write(6,*) '  pij=', pij, ' cij=', cij, ' wtmp=', wtmp
-      endif
-
 2     continue
 c     nn=nx*ny
 c     i0=ismax(nn,w(1,1),1)

@@ -1,0 +1,25 @@
+Note: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG IEEE_DIVIDE_BY_ZERO
+  order in time ? (3,4) 
+  # of points in x-dir & y-dir ? 
+  cfl ? ( e.g. 0.6 )
+  maximum # of time steps ? 
+  
+  WENO-LF-4 or WENO-LF-5 with RK-3/RK-4 
+  
+ order in time:            3
+ # of equations:            4
+ # of points in x-dir:           50
+ # of points in y-dir:           50
+ CFL =   0.59999999999999998     
+ maximum # of time steps         1000
+ the final time
+ enter problem number
+   1 = steady vortex
+   2 = horizontally moving vortex
+   3 = diagonally moving vortex
+ enter the status of the initial condition
+   0 = initial at t=0.
+   1 = restart from a restart file
+           0 t=   0.0000000000000000      accumulated cpu=   0.0000000000000000     
+ cpu per 20 time steps   0.0000000000000000     
+ nt =            1   tnum =   0.50000000000000000     

@@ -75,3 +75,5 @@ full_output.txt
 # Additional compiled binaries
 weno_debug
 weno_beast
+
+*.dat
